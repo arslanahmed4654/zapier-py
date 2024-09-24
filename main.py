@@ -31,10 +31,14 @@ class PDF(FPDF):
 def create_pallet_label(data_array, filename):
     pdf = PDF()
     pdf.set_auto_page_break(auto=False)
-    pdf.set_font('Arial', '', 12)
-
+    
+    row_ids = []  # List to store row IDs for deletion
+    
+    # Loop through the data array to create individual pages
     for data in data_array:
         pdf.add_page()
+
+        # QR Code generation
         qr_code_data = data.get('StorageID', 'DEFAULT_STORAGE_ID') 
         qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={qr_code_data}"
         qr_code_response = requests.get(qr_code_url)
@@ -47,22 +51,31 @@ def create_pallet_label(data_array, filename):
             pdf.image(qr_code_filename, x=10, y=10, w=50, h=50)
             os.remove(qr_code_filename)
 
-        pdf.set_font('Arial', 'B', 20)
+        # Set font for "Customer + Order"
+        pdf.set_font('Arial', 'B', 50)
         pdf.set_xy(10, 70)
         pdf.cell(0, 10, f"{data.get('Customer + Order', 'DEFAULT_ORDER')}", ln=True)
-     
-        pdf.set_font('Arial', '', 12)
+
+        # Add a line space
+        pdf.cell(0, 10, '', ln=True)  # Empty line for spacing
+
+        # Set font for "Content"
+        pdf.set_font('Arial', '', 25)
         content = data.get('Content', 'Default Content')
         pdf.multi_cell(0, 8, content)
 
+        # Adjusting remaining space
         remaining_space = (pdf.h / 2) - pdf.get_y() - 20
         if remaining_space > 0:
             pdf.set_y(pdf.get_y() + remaining_space / 2)
 
+        # Set font for "Owner" and "Created By"
+        pdf.set_font('Arial', '', 12)
         pdf.cell(0, 8, f"Owner: {data.get('Owner', 'Default Owner')}", ln=True)
         pdf.cell(0, 8, f"Created By: {data.get('Created By', 'Default Creator')}", ln=True)
-        
-        pdf.set_y(pdf.get_y() + 10)
+
+        pdf.set_y(pdf.get_y() + 10)  # Additional spacing
+
         label_revision = data.get('LabelRevision', 'DEFAULT_LABEL_REVISION')
         position_id = data.get('PositionID', 'DEFAULT_POSITION_ID')
         pdf.set_xy(pdf.w - 100, pdf.get_y())
@@ -70,10 +83,12 @@ def create_pallet_label(data_array, filename):
         pdf.cell(0, 10, f"{label_revision} - {position_id}", 0, 0, 'R')
 
         mail_address = data.get('MailAdress', 'default@mail.com')
+        
+        # Collect row ID for deletion later
+        row_ids.append(data.get('StorageID'))
 
     pdf.output(filename)
-    return mail_address
-
+    return mail_address, row_ids  # Return email and row IDs
 
 @app.route('/')
 def home():
@@ -128,10 +143,13 @@ def fetch_and_generate():
                 data_array.append(entry_dict)
 
             pdf_filename = 'pallet_label.pdf'
-            mail_address = create_pallet_label(data_array, pdf_filename)
+            mail_address, row_ids = create_pallet_label(data_array, pdf_filename)
 
-            # Uncomment the following line to send the email with the PDF
+            # Send the email with the PDF
             send_email_with_attachment(mail_address, pdf_filename)
+
+            # Delete rows from the Glide API
+            delete_rows(row_ids)
 
             return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
         else:
@@ -149,6 +167,28 @@ def send_email_with_attachment(to_email, pdf_filename):
             mail.send(msg)
     except Exception as e:
         print(f"Error sending email: {str(e)}")
+
+def delete_rows(row_ids):
+    try:
+        glide_delete_url = 'https://functions.prod.internal.glideapps.com/api/apps/WALpghAXNz7kVRH9HFdx/tables/native-table-7HWStsovzmSyVBveLMUe/rows'
+        headers = {
+            'user-agent': 'Make/production',
+            'authorization': 'Bearer 4ba1af06-5ac2-4346-a5b6-b9ded23fafa8',  # Replace with your actual token
+            'x-glide-client-id': '3def4919-730b-4dac-9a18-5478c9d4ea0c',
+            'content-type': 'application/json'
+        }
+        
+        # Convert row_ids to JSON format
+        row_ids_json = json.dumps(row_ids)
+
+        response = requests.delete(glide_delete_url, headers=headers, data=row_ids_json)
+
+        if response.status_code == 200:
+            print("Rows deleted successfully.")
+        else:
+            print(f"Failed to delete rows: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"Error deleting rows: {str(e)}")
 
 if __name__ == '__main__':
     app.run(debug=True)
