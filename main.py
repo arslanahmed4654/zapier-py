@@ -131,7 +131,7 @@ def fetch_and_generate():
             mail_address = create_pallet_label(data_array, pdf_filename)
 
             # Uncomment the following line to send the email with the PDF
-            # send_email_with_attachment(mail_address, pdf_filename)
+            send_email_with_attachment(mail_address, pdf_filename)
 
             return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
         else:
