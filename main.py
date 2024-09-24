@@ -133,7 +133,7 @@ def home():
 def generate_pallet_label():
     try:
         # Get data from POST request
-        raw_entries = request.json['data']['entries']
+        raw_entries = request.json['entries']
         
         # Transform the raw entries into a structured format
         data_array = []
