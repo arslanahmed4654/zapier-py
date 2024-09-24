@@ -5,66 +5,94 @@ import os
 
 app = Flask(__name__)
 
-# Function to create shipment label PDF with QR code for each entry
-def create_shipment_label(data_array, filename):
-    pdf = FPDF(orientation='L', unit='mm', format='A5')  # Set A5 landscape
+class PDF(FPDF):
+    def __init__(self):
+        super().__init__(orientation='P', unit='mm', format='A4')
+
+    def header(self):
+        # Logo on the right
+        self.image('logo.jpg', x=self.w - 90, y=10, w=80)
+
+    def footer(self):
+        # Green border
+        self.set_draw_color(0, 176, 80)  # RGB values for #00B050
+        self.set_line_width(2)  # Thick line
+        # Draw rectangle from top of page to middle of the page
+        self.rect(5, 5, 200, self.h / 2 - 5)
+
+def create_pallet_label(data_array, filename):
+    pdf = PDF()
+    pdf.set_auto_page_break(auto=False)  # Disable auto page break
+    pdf.set_font('Arial', '', 12)
 
     for data in data_array:
         pdf.add_page()
-        pdf.set_font('Arial', 'B', 16)
-        
-        # Add header
-        pdf.cell(190, 10, txt="Shipment Label", ln=True, align='C')  # Adjust width for landscape
-        pdf.ln(10)
 
-        # Add Sender Details
-        pdf.set_font('Arial', '', 12)
-        pdf.cell(190, 10, txt=f"Sender Name: {data.get('sender_name', 'John Doe')}", ln=True)
-        pdf.cell(190, 10, txt=f"Sender Address: {data.get('sender_address', '1234 Elm St, City, Country')}", ln=True)
-        pdf.cell(190, 10, txt=f"Sender Email: {data.get('sender_email', 'john@example.com')}", ln=True)
-        pdf.cell(190, 10, txt=f"Sender Phone: {data.get('sender_phone', '+1 234 567 890')}", ln=True)
-        pdf.ln(10)
-        
-        # Add Receiver Details
-        pdf.cell(190, 10, txt=f"Receiver Name: {data.get('receiver_name', 'Jane Doe')}", ln=True)
-        pdf.cell(190, 10, txt=f"Receiver Address: {data.get('receiver_address', '5678 Oak St, Another City, Country')}", ln=True)
-        pdf.cell(190, 10, txt=f"Receiver Email: {data.get('receiver_email', 'jane@example.com')}", ln=True)
-        pdf.cell(190, 10, txt=f"Receiver Phone: {data.get('receiver_phone', '+1 987 654 321')}", ln=True)
-        pdf.ln(10)
-
-        # Add shipment details
-        pdf.cell(190, 10, txt=f"Shipment Date: {data.get('shipment_date', '2024-09-23')}", ln=True)
-        pdf.cell(190, 10, txt=f"Tracking Number: {data.get('tracking_number', 'TRACK123456')}", ln=True)
-        pdf.ln(10)
-        
-        # Fetch and add QR Code
-        qr_code_data = data.get('tracking_number', 'TRACK123456')
+        # QR Code on the left
+        qr_code_data = data.get('Customer + Order', 'DEFAULT_ORDER')
         qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={qr_code_data}"
         qr_code_response = requests.get(qr_code_url)
-        
+
         if qr_code_response.status_code == 200:
-            qr_code_filename = "qr_code.png"
+            qr_code_filename = f"qr_code_{qr_code_data}.png"
             with open(qr_code_filename, 'wb') as f:
                 f.write(qr_code_response.content)
 
-            # Insert QR code image in PDF (adjusted for landscape)
-            pdf.image(qr_code_filename, x=75, y=None, w=50, h=50)
+            # Insert QR code image in PDF
+            pdf.image(qr_code_filename, x=10, y=10, w=50, h=50)
             os.remove(qr_code_filename)  # Remove the QR code image after embedding it
-    
+
+        # Customer + Order (below logo and QR code, left-aligned)
+        pdf.set_font('Arial', 'B', 16)
+        pdf.set_xy(10, 70)
+        pdf.cell(0, 10, f"Customer + Order: {data.get('Customer + Order', 'DEFAULT_ORDER')}", ln=True)
+
+        # Content
+        pdf.set_font('Arial', 'B', 14)
+        pdf.set_xy(10, pdf.get_y() + 10)
+        pdf.cell(0, 10, "Content", ln=True)
+        pdf.set_font('Arial', '', 12)
+        content = data.get('Content', 'Default Content')
+        pdf.multi_cell(0, 8, content)
+
+        # LabelRevision - Position ID (at the right bottom of content)
+        label_revision = data.get('LabelRevision', 'Default LabelRevision')
+        position_id = data.get('PositionID', 'Default Position ID')  # Corrected the key to match payload
+        pdf.set_xy(10, pdf.get_y() + 5)
+        pdf.cell(0, 10, f"LabelRevision: {label_revision} - Position ID: {position_id}", ln=True)
+
+        # Owner and Created By
+        remaining_space = (pdf.h / 2) - pdf.get_y() - 20  # Calculate remaining space
+        if remaining_space > 0:
+            pdf.set_y(pdf.get_y() + remaining_space / 2)  # Move down by half of the remaining space
+
+        pdf.cell(0, 8, f"Owner: {data.get('Owner', 'Default Owner')}", ln=True)
+        pdf.cell(0, 8, f"Created By: {data.get('Created By', 'Default Creator')}", ln=True)
+
+        # StorageID (optional: add if needed)
+        storage_id = data.get('StorageID', 'Default StorageID')
+        pdf.cell(0, 8, f"StorageID: {storage_id}", ln=True)
+
+        # MailAddress saved for later use
+        mail_address = data.get('MailAdress', 'default@mail.com')
+
     # Save the PDF to file
     pdf.output(filename)
 
-@app.route('/generate-shipment-label', methods=['POST'])
-def generate_shipment_label():
+    return mail_address  # Return the email address for later use
+
+@app.route('/generate-pallet-label', methods=['POST'])
+def generate_pallet_label():
     try:
         # Get data from POST request (array of entries)
         data_array = request.json['entries']
         
         # Create PDF file
-        pdf_filename = 'shipment_label.pdf'
-        create_shipment_label(data_array, pdf_filename)
+        pdf_filename = 'pallet_label.pdf'
+        mail_address = create_pallet_label(data_array, pdf_filename)
         
-        return jsonify({"message": f"PDF created successfully at {pdf_filename}"}), 200
+        # You can use `mail_address` later as needed
+        return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
