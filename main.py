@@ -32,8 +32,6 @@ def create_pallet_label(data_array, filename):
     pdf = PDF()
     pdf.set_auto_page_break(auto=False)
     
-    row_ids = []  # List to store row IDs for deletion
-    
     # Loop through the data array to create individual pages
     for data in data_array:
         pdf.add_page()
@@ -83,12 +81,9 @@ def create_pallet_label(data_array, filename):
         pdf.cell(0, 10, f"{label_revision} - {position_id}", 0, 0, 'R')
 
         mail_address = data.get('MailAdress', 'default@mail.com')
-        
-        # Collect row ID for deletion later
-        row_ids.append(data.get('StorageID'))
 
     pdf.output(filename)
-    return mail_address, row_ids  # Return email and row IDs
+    return mail_address, [data['StorageID'] for data in data_array]
 
 @app.route('/')
 def home():
@@ -143,13 +138,13 @@ def fetch_and_generate():
                 data_array.append(entry_dict)
 
             pdf_filename = 'pallet_label.pdf'
-            mail_address, row_ids = create_pallet_label(data_array, pdf_filename)
+            mail_address, row_ids_to_delete = create_pallet_label(data_array, pdf_filename)
 
             # Send the email with the PDF
-            send_email_with_attachment(mail_address, pdf_filename)
+            # send_email_with_attachment(mail_address, pdf_filename)
 
-            # Delete rows from the Glide API
-            delete_rows(row_ids)
+            # Delete the rows after sending the email
+            delete_rows(row_ids_to_delete)
 
             return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
         else:
@@ -170,22 +165,18 @@ def send_email_with_attachment(to_email, pdf_filename):
 
 def delete_rows(row_ids):
     try:
-        glide_delete_url = 'https://functions.prod.internal.glideapps.com/api/apps/WALpghAXNz7kVRH9HFdx/tables/native-table-7HWStsovzmSyVBveLMUe/rows'
+        glide_api_url = 'https://functions.prod.internal.glideapps.com/api/apps/WALpghAXNz7kVRH9HFdx/tables/native-table-7HWStsovzmSyVBveLMUe/rows'
         headers = {
             'user-agent': 'Make/production',
             'authorization': 'Bearer 4ba1af06-5ac2-4346-a5b6-b9ded23fafa8',  # Replace with your actual token
             'x-glide-client-id': '3def4919-730b-4dac-9a18-5478c9d4ea0c',
             'content-type': 'application/json'
         }
-        
-        # Convert row_ids to JSON format
-        row_ids_json = json.dumps(row_ids)
 
-        response = requests.delete(glide_delete_url, headers=headers, data=row_ids_json)
+        # Send the DELETE request with the row IDs
+        response = requests.delete(glide_api_url, headers=headers, json=row_ids)
 
-        if response.status_code == 200:
-            print("Rows deleted successfully.")
-        else:
+        if response.status_code != 200:
             print(f"Failed to delete rows: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"Error deleting rows: {str(e)}")
