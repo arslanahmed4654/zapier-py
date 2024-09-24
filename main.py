@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify, render_template_string
 from fpdf import FPDF
 import requests
 import os
-from urllib.parse import quote as url_quote  # Updated import
 
 app = Flask(__name__)
 
@@ -11,20 +10,25 @@ class PDF(FPDF):
         super().__init__(orientation='P', unit='mm', format='A4')
 
     def header(self):
+        # Logo on the right
         self.image('logo.jpg', x=self.w - 90, y=10, w=80)
 
     def footer(self):
-        self.set_draw_color(0, 176, 80)
-        self.set_line_width(2)
+        # Green border
+        self.set_draw_color(0, 176, 80)  # RGB values for #00B050
+        self.set_line_width(2)  # Thick line
+        # Draw rectangle from top of page to middle of the page
         self.rect(5, 5, 200, self.h / 2 - 5)
 
 def create_pallet_label(data_array, filename):
     pdf = PDF()
-    pdf.set_auto_page_break(auto=False)
+    pdf.set_auto_page_break(auto=False)  # Disable auto page break
     pdf.set_font('Arial', '', 12)
 
     for data in data_array:
         pdf.add_page()
+
+        # QR Code on the left
         qr_code_data = data.get('Customer + Order', 'DEFAULT_ORDER')
         qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={qr_code_data}"
         qr_code_response = requests.get(qr_code_url)
@@ -34,13 +38,16 @@ def create_pallet_label(data_array, filename):
             with open(qr_code_filename, 'wb') as f:
                 f.write(qr_code_response.content)
 
+            # Insert QR code image in PDF
             pdf.image(qr_code_filename, x=10, y=10, w=50, h=50)
-            os.remove(qr_code_filename)
+            os.remove(qr_code_filename)  # Remove the QR code image after embedding it
 
+        # Customer + Order (below logo and QR code, left-aligned)
         pdf.set_font('Arial', 'B', 16)
         pdf.set_xy(10, 70)
         pdf.cell(0, 10, f"Customer + Order: {data.get('Customer + Order', 'DEFAULT_ORDER')}", ln=True)
 
+        # Content
         pdf.set_font('Arial', 'B', 14)
         pdf.set_xy(10, pdf.get_y() + 10)
         pdf.cell(0, 10, "Content", ln=True)
@@ -48,28 +55,42 @@ def create_pallet_label(data_array, filename):
         content = data.get('Content', 'Default Content')
         pdf.multi_cell(0, 8, content)
 
+        # LabelRevision - Position ID (at the right bottom of content)
         label_revision = data.get('LabelRevision', 'Default LabelRevision')
-        position_id = data.get('PositionID', 'Default Position ID')
+        position_id = data.get('PositionID', 'Default Position ID')  # Corrected the key to match payload
         pdf.set_xy(10, pdf.get_y() + 5)
         pdf.cell(0, 10, f"LabelRevision: {label_revision} - Position ID: {position_id}", ln=True)
 
-        remaining_space = (pdf.h / 2) - pdf.get_y() - 20
+        # Owner and Created By
+        remaining_space = (pdf.h / 2) - pdf.get_y() - 20  # Calculate remaining space
         if remaining_space > 0:
-            pdf.set_y(pdf.get_y() + remaining_space / 2)
+            pdf.set_y(pdf.get_y() + remaining_space / 2)  # Move down by half of the remaining space
 
         pdf.cell(0, 8, f"Owner: {data.get('Owner', 'Default Owner')}", ln=True)
         pdf.cell(0, 8, f"Created By: {data.get('Created By', 'Default Creator')}", ln=True)
 
+        # StorageID (optional: add if needed)
         storage_id = data.get('StorageID', 'Default StorageID')
         pdf.cell(0, 8, f"StorageID: {storage_id}", ln=True)
 
+        # MailAddress saved for later use
         mail_address = data.get('MailAdress', 'default@mail.com')
 
+    # Save the PDF to file
     pdf.output(filename)
-    return mail_address
 
+    return mail_address  # Return the email address for later use
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    if request.method == 'POST':
+        data = request.get_json()  # Get the JSON data from the POST request
+        print(f"Received POST data: {data}")
+        return "POST request received!", 200  # Respond with success message
+        
 @app.route('/')
 def home():
+    # Render a simple "Coming Soon" HTML page
     return render_template_string('''
         <!doctype html>
         <html lang="en">
@@ -109,10 +130,14 @@ def home():
 @app.route('/generate-pallet-label', methods=['POST'])
 def generate_pallet_label():
     try:
+        # Get data from POST request (array of entries)
         data_array = request.json['entries']
+        
+        # Create PDF file
         pdf_filename = 'pallet_label.pdf'
         mail_address = create_pallet_label(data_array, pdf_filename)
         
+        # You can use `mail_address` later as needed
         return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
