@@ -80,6 +80,7 @@ def create_pallet_label(data_array, filename):
     pdf.output(filename)
 
     return mail_address  # Return the email address for later use
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if request.method == 'POST':
@@ -131,9 +132,22 @@ def home():
 @app.route('/generate-pallet-label', methods=['POST'])
 def generate_pallet_label():
     try:
-        # Get data from POST request (array of entries)
-        data_array = request.json['entries']
+        # Get data from POST request
+        raw_entries = request.json['data']['entries']
         
+        # Transform the raw entries into a structured format
+        data_array = []
+        entries = raw_entries.split('\n\n')  # Split by double newlines to get each entry
+        for entry in entries:
+            # Initialize an entry dictionary
+            entry_dict = {}
+            lines = entry.split('\n')
+            for line in lines:
+                if ': ' in line:  # Check if the line contains a key-value pair
+                    key, value = line.split(': ', 1)  # Split only at the first occurrence of ': '
+                    entry_dict[key.strip()] = value.strip()  # Add to dictionary
+            data_array.append(entry_dict)
+
         # Create PDF file
         pdf_filename = 'pallet_label.pdf'
         mail_address = create_pallet_label(data_array, pdf_filename)
