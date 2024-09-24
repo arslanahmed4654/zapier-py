@@ -2,3 +2,4 @@ Flask
 fpdf
 requests
 gunicorn
+Flask-Mail

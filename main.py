@@ -1,35 +1,41 @@
 from flask import Flask, request, jsonify, render_template_string
+from flask_mail import Mail, Message
 from fpdf import FPDF
 import requests
 import os
 
 app = Flask(__name__)
 
+# Configure Flask-Mail
+app.config['MAIL_SERVER'] = 'smtp.office365.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'Bot_donotreply@dynatecsmv.no'  # Replace with your email
+app.config['MAIL_PASSWORD'] = 'NeverEverReply1995'  # Replace with your email password
+app.config['MAIL_DEFAULT_SENDER'] = 'Bot_donotreply@dynatecsmv.no'  # Replace with your email
+
+mail = Mail(app)
+
 class PDF(FPDF):
     def __init__(self):
         super().__init__(orientation='P', unit='mm', format='A4')
 
     def header(self):
-        # Logo on the right
         self.image('logo.jpg', x=self.w - 90, y=10, w=80)
 
     def footer(self):
-        # Green border
-        self.set_draw_color(0, 176, 80)  # RGB values for #00B050
-        self.set_line_width(2)  # Thick line
-        # Draw rectangle from top of page to middle of the page
+        self.set_draw_color(0, 176, 80)  # RGB for #00B050
+        self.set_line_width(2)
         self.rect(5, 5, 200, self.h / 2 - 5)
 
 def create_pallet_label(data_array, filename):
     pdf = PDF()
-    pdf.set_auto_page_break(auto=False)  # Disable auto page break
+    pdf.set_auto_page_break(auto=False)
     pdf.set_font('Arial', '', 12)
 
     for data in data_array:
         pdf.add_page()
-
-        # QR Code on the left
-        qr_code_data = data.get('Customer + Order', 'DEFAULT_ORDER')
+        qr_code_data = data.get('StorageID', 'DEFAULT_STORAGE_ID') 
         qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={qr_code_data}"
         qr_code_response = requests.get(qr_code_url)
 
@@ -38,61 +44,39 @@ def create_pallet_label(data_array, filename):
             with open(qr_code_filename, 'wb') as f:
                 f.write(qr_code_response.content)
 
-            # Insert QR code image in PDF
             pdf.image(qr_code_filename, x=10, y=10, w=50, h=50)
-            os.remove(qr_code_filename)  # Remove the QR code image after embedding it
+            os.remove(qr_code_filename)
 
-        # Customer + Order (below logo and QR code, left-aligned)
-        pdf.set_font('Arial', 'B', 16)
+        pdf.set_font('Arial', 'B', 20)
         pdf.set_xy(10, 70)
-        pdf.cell(0, 10, f"Customer + Order: {data.get('Customer + Order', 'DEFAULT_ORDER')}", ln=True)
-
-        # Content
-        pdf.set_font('Arial', 'B', 14)
-        pdf.set_xy(10, pdf.get_y() + 10)
-        pdf.cell(0, 10, "Content", ln=True)
+        pdf.cell(0, 10, f"{data.get('Customer + Order', 'DEFAULT_ORDER')}", ln=True)
+     
         pdf.set_font('Arial', '', 12)
         content = data.get('Content', 'Default Content')
         pdf.multi_cell(0, 8, content)
 
-        # LabelRevision - Position ID (at the right bottom of content)
-        label_revision = data.get('LabelRevision', 'Default LabelRevision')
-        position_id = data.get('PositionID', 'Default Position ID')  # Corrected the key to match payload
-        pdf.set_xy(10, pdf.get_y() + 5)
-        pdf.cell(0, 10, f"LabelRevision: {label_revision} - Position ID: {position_id}", ln=True)
-
-        # Owner and Created By
-        remaining_space = (pdf.h / 2) - pdf.get_y() - 20  # Calculate remaining space
+        remaining_space = (pdf.h / 2) - pdf.get_y() - 20
         if remaining_space > 0:
-            pdf.set_y(pdf.get_y() + remaining_space / 2)  # Move down by half of the remaining space
+            pdf.set_y(pdf.get_y() + remaining_space / 2)
 
         pdf.cell(0, 8, f"Owner: {data.get('Owner', 'Default Owner')}", ln=True)
         pdf.cell(0, 8, f"Created By: {data.get('Created By', 'Default Creator')}", ln=True)
+        
+        pdf.set_y(pdf.get_y() + 10)
+        label_revision = data.get('LabelRevision', 'DEFAULT_LABEL_REVISION')
+        position_id = data.get('PositionID', 'DEFAULT_POSITION_ID')
+        pdf.set_xy(pdf.w - 100, pdf.get_y())
+        pdf.set_font('Arial', 'I', 10)
+        pdf.cell(0, 10, f"{label_revision} - {position_id}", 0, 0, 'R')
 
-        # StorageID (optional: add if needed)
-        storage_id = data.get('StorageID', 'Default StorageID')
-        pdf.cell(0, 8, f"StorageID: {storage_id}", ln=True)
-
-        # MailAddress saved for later use
         mail_address = data.get('MailAdress', 'default@mail.com')
 
-    # Save the PDF to file
     pdf.output(filename)
+    return mail_address
 
-    return mail_address  # Return the email address for later use
-
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    if request.method == 'POST':
-        data = request.get_json()  # Get the JSON data from the POST request
-        print(f"Received POST data: {data}")
-        
-        # Return the received POST data in the response
-        return jsonify(data), 200  # Respond with the received data
 
 @app.route('/')
 def home():
-    # Render a simple "Coming Soon" HTML page
     return render_template_string('''
         <!doctype html>
         <html lang="en">
@@ -101,23 +85,9 @@ def home():
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Coming Soon</title>
             <style>
-                body {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    background-color: #f8f9fa;
-                    font-family: Arial, sans-serif;
-                    text-align: center;
-                }
-                h1 {
-                    font-size: 3em;
-                    color: #343a40;
-                }
-                p {
-                    font-size: 1.5em;
-                    color: #6c757d;
-                }
+                body { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f8f9fa; font-family: Arial, sans-serif; text-align: center; }
+                h1 { font-size: 3em; color: #343a40; }
+                p { font-size: 1.5em; color: #6c757d; }
             </style>
         </head>
         <body>
@@ -129,33 +99,56 @@ def home():
         </html>
     ''')
 
-@app.route('/generate-pallet-label', methods=['POST'])
-def generate_pallet_label():
+@app.route('/fetch-and-generate', methods=['GET'])
+def fetch_and_generate():
     try:
-        # Get data from POST request
-        raw_entries = request.json['entries']
-        
-        # Transform the raw entries into a structured format
-        data_array = []
-        entries = raw_entries.split('\n\n')  # Split by double newlines to get each entry
-        for entry in entries:
-            # Initialize an entry dictionary
-            entry_dict = {}
-            lines = entry.split('\n')
-            for line in lines:
-                if ': ' in line:  # Check if the line contains a key-value pair
-                    key, value = line.split(': ', 1)  # Split only at the first occurrence of ': '
-                    entry_dict[key.strip()] = value.strip()  # Add to dictionary
-            data_array.append(entry_dict)
+        glide_api_url = 'https://functions.prod.internal.glideapps.com/api/apps/WALpghAXNz7kVRH9HFdx/tables/native-table-7HWStsovzmSyVBveLMUe/rows'
+        headers = {
+            'user-agent': 'Make/production',
+            'authorization': 'Bearer 4ba1af06-5ac2-4346-a5b6-b9ded23fafa8',  # Replace with your actual token
+            'x-glide-client-id': '3def4919-730b-4dac-9a18-5478c9d4ea0c'
+        }
 
-        # Create PDF file
-        pdf_filename = 'pallet_label.pdf'
-        mail_address = create_pallet_label(data_array, pdf_filename)
-        
-        # You can use `mail_address` later as needed
-        return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
+        response = requests.get(glide_api_url, headers=headers)
+
+        if response.status_code == 200:
+            data = response.json()
+            data_array = []
+            for row in data.get('data', {}).get('rows', []):
+                entry_dict = {
+                    'Customer + Order': row.get('Name', 'DEFAULT_ORDER'),
+                    'StorageID': row.get('$rowID', 'DEFAULT_STORAGE_ID'),
+                    'MailAdress': row.get('383W6', 'default@mail.com'),
+                    'Owner': row.get('loQhD', 'Default Owner'),
+                    'Created By': row.get('dVWZJ', 'Default Creator'),
+                    'Content': row.get('PyIlB', 'Default Content'),
+                    'LabelRevision': row.get('edrDV', 'DEFAULT_LABEL_REVISION'),
+                    'PositionID': row.get('LVx14', 'DEFAULT_POSITION_ID'),
+                }
+                data_array.append(entry_dict)
+
+            pdf_filename = 'pallet_label.pdf'
+            mail_address = create_pallet_label(data_array, pdf_filename)
+
+            # Uncomment the following line to send the email with the PDF
+            # send_email_with_attachment(mail_address, pdf_filename)
+
+            return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
+        else:
+            return jsonify({"error": "Failed to fetch data from Glide API", "status_code": response.status_code}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+def send_email_with_attachment(to_email, pdf_filename):
+    try:
+        with app.app_context():
+            msg = Message("Pallet Label PDF", recipients=[to_email])
+            msg.body = "Please find the attached pallet label PDF."
+            with app.open_resource(pdf_filename) as pdf:
+                msg.attach(pdf_filename, "application/pdf", pdf.read())
+            mail.send(msg)
+    except Exception as e:
+        print(f"Error sending email: {str(e)}")
 
 if __name__ == '__main__':
     app.run(debug=True)
