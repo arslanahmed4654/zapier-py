@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string
 from fpdf import FPDF
 import requests
 import os
@@ -80,6 +80,45 @@ def create_pallet_label(data_array, filename):
     pdf.output(filename)
 
     return mail_address  # Return the email address for later use
+
+@app.route('/')
+def home():
+    # Render a simple "Coming Soon" HTML page
+    return render_template_string('''
+        <!doctype html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Coming Soon</title>
+            <style>
+                body {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    background-color: #f8f9fa;
+                    font-family: Arial, sans-serif;
+                    text-align: center;
+                }
+                h1 {
+                    font-size: 3em;
+                    color: #343a40;
+                }
+                p {
+                    font-size: 1.5em;
+                    color: #6c757d;
+                }
+            </style>
+        </head>
+        <body>
+            <div>
+                <h1>Coming Soon</h1>
+                <p>We are working hard to get this site up and running. Stay tuned!</p>
+            </div>
+        </body>
+        </html>
+    ''')
 
 @app.route('/generate-pallet-label', methods=['POST'])
 def generate_pallet_label():
