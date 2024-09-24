@@ -80,14 +80,15 @@ def create_pallet_label(data_array, filename):
     pdf.output(filename)
 
     return mail_address  # Return the email address for later use
-
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if request.method == 'POST':
         data = request.get_json()  # Get the JSON data from the POST request
         print(f"Received POST data: {data}")
-        return "POST request received!", 200  # Respond with success message
         
+        # Return the received POST data in the response
+        return jsonify(data), 200  # Respond with the received data
+
 @app.route('/')
 def home():
     # Render a simple "Coming Soon" HTML page
