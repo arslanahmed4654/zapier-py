@@ -29,7 +29,7 @@ class PDF(FPDF):
         self.rect(5, 5, 200, self.h / 2 - 5)
 
 def create_pallet_label(data_array, filename):
-    pdf = FPDF()
+    pdf = PDF()
     pdf.set_auto_page_break(auto=False)
 
     def clean_text(text):
@@ -39,8 +39,9 @@ def create_pallet_label(data_array, filename):
     for data in data_array:
         pdf.add_page()
 
+        print(data)
         # QR Code generation
-        qr_code_data = clean_text(data.get('StorageID', 'DEFAULT_STORAGE_ID'))
+        qr_code_data = clean_text(data.get('qr', 'DEFAULT_STORAGE_ID'))
         qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={qr_code_data}"
         qr_code_response = requests.get(qr_code_url)
 
@@ -53,7 +54,7 @@ def create_pallet_label(data_array, filename):
             os.remove(qr_code_filename)
 
         # Set font for "Customer + Order"
-        pdf.set_font('Arial', 'B', 50)
+        pdf.set_font('Arial', 'B', 40)
         pdf.set_xy(10, 70)
         pdf.cell(0, 10, clean_text(data.get('Customer + Order', 'DEFAULT_ORDER')), ln=True)
 
@@ -131,7 +132,8 @@ def fetch_and_generate():
                     'Customer + Order': row.get('Name', 'DEFAULT_ORDER'),
                     'StorageID': row.get('$rowID', 'DEFAULT_STORAGE_ID'),
                     'MailAdress': row.get('383W6', 'default@mail.com'),
-                    'Owner': row.get('loQhD', 'Default Owner'),
+                    'Owner': row.get('loQhD', 'Default Owner'),      
+                    'qr': row.get('knlbN', 'DEFAULT_STORAGE_ID'),
                     'Created By': row.get('dVWZJ', 'Default Creator'),
                     'Content': row.get('PyIlB', 'Default Content'),
                     'LabelRevision': row.get('edrDV', 'DEFAULT_LABEL_REVISION'),
@@ -143,10 +145,10 @@ def fetch_and_generate():
             mail_address, row_ids_to_delete = create_pallet_label(data_array, pdf_filename)
 
             # Send the email with the PDF
-            send_email_with_attachment(mail_address, pdf_filename)
+            # send_email_with_attachment(mail_address, pdf_filename)
 
             # Delete the rows after sending the email
-            delete_rows(row_ids_to_delete)
+            # delete_rows(row_ids_to_delete)
 
             return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
         else:
