@@ -154,7 +154,7 @@ def fetch_and_generate():
             email_thread.start()
 
             # Delete the rows after starting the email thread
-            # delete_rows(row_ids_to_delete)
+            delete_rows(row_ids_to_delete)
 
             return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
         else:
