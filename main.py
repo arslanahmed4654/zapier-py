@@ -141,7 +141,7 @@ def fetch_and_generate():
             mail_address, row_ids_to_delete = create_pallet_label(data_array, pdf_filename)
 
             # Send the email with the PDF
-            # send_email_with_attachment(mail_address, pdf_filename)
+            send_email_with_attachment(mail_address, pdf_filename)
 
             # Delete the rows after sending the email
             delete_rows(row_ids_to_delete)
