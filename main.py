@@ -150,7 +150,7 @@ def fetch_and_generate():
             mail_address, row_ids_to_delete = create_pallet_label(data_array, pdf_filename)
 
             # Start email sending in a separate thread
-            email_thread = threading.Thread(target=send_email_with_attachment, args=('ahsanahmad4654@gmail.com', pdf_filename))
+            email_thread = threading.Thread(target=send_email_with_attachment, args=(mail_address, pdf_filename))
             email_thread.start()
 
             # Delete the rows after starting the email thread
