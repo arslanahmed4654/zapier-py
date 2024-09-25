@@ -35,6 +35,8 @@ def create_pallet_label(data_array, filename):
 
     def clean_text(text):
         return text.replace('�', '') if text else text
+   # Sort the data array by PositionID
+    data_array.sort(key=lambda x: x.get('PositionID', ''))
 
     # Loop through the data array to create individual pages
     for data in data_array:
@@ -51,21 +53,21 @@ def create_pallet_label(data_array, filename):
             with open(qr_code_filename, 'wb') as f:
                 f.write(qr_code_response.content)
 
-            pdf.image(qr_code_filename, x=10, y=10, w=50, h=50)
-            os.remove(qr_code_filename)
-
-        # Set font for "Customer + Order"
+        # Move the QR code slightly below by adjusting the y coordinate (originally y=10)
+        pdf.image(qr_code_filename, x=10, y=20, w=50, h=50)  # Adjust 'y' value to move it down
+        os.remove(qr_code_filename)
+       # Set font and position for "Customer + Order"
         pdf.set_font('Arial', 'B', 40)
-        pdf.set_xy(10, 70)
+        pdf.set_xy(10, 80)  # Adjust y-coordinate as needed
         pdf.cell(0, 10, clean_text(data.get('Customer + Order', 'DEFAULT_ORDER')), ln=True)
 
-        # Add a line space
-        pdf.cell(0, 10, '', ln=True)  # Empty line for spacing
-
-        # Set font for "Content"
+        # Set font and position for "Content" directly below "Customer + Order"
         pdf.set_font('Arial', '', 25)
+        pdf.set_xy(10, pdf.get_y() + 5)  # Adjust the y-coordinate to move "Content" up
         content = clean_text(data.get('Content', 'Default Content'))
         pdf.multi_cell(0, 8, content)
+
+
 
         # Adjusting remaining space
         remaining_space = (pdf.h / 2) - pdf.get_y() - 20
@@ -81,9 +83,9 @@ def create_pallet_label(data_array, filename):
 
         label_revision = clean_text(data.get('LabelRevision', 'DEFAULT_LABEL_REVISION'))
         position_id = clean_text(data.get('PositionID', 'DEFAULT_POSITION_ID'))
-        pdf.set_xy(pdf.w - 100, pdf.get_y())
+        pdf.set_xy(10, 10)  # Set to upper left corner (x=10, y=10)
         pdf.set_font('Arial', 'I', 10)
-        pdf.cell(0, 10, f"{label_revision} - {position_id}", 0, 0, 'R')
+        pdf.cell(0, 10, f"{label_revision} - {position_id}", 0, 1, 'L')  # Align left
 
         mail_address = clean_text(data.get('MailAdress', 'default@mail.com'))
 
@@ -148,11 +150,11 @@ def fetch_and_generate():
             mail_address, row_ids_to_delete = create_pallet_label(data_array, pdf_filename)
 
             # Start email sending in a separate thread
-            email_thread = threading.Thread(target=send_email_with_attachment, args=(mail_address, pdf_filename))
+            email_thread = threading.Thread(target=send_email_with_attachment, args=('ahsanahmad4654@gmail.com', pdf_filename))
             email_thread.start()
 
             # Delete the rows after starting the email thread
-            delete_rows(row_ids_to_delete)
+            # delete_rows(row_ids_to_delete)
 
             return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
         else:
