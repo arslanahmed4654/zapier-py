@@ -3,6 +3,7 @@ from flask_mail import Mail, Message
 from fpdf import FPDF
 import requests
 import os
+import threading
 
 app = Flask(__name__)
 
@@ -112,6 +113,7 @@ def home():
         </html>
     ''')
 
+
 @app.route('/fetch-and-generate', methods=['GET'])
 def fetch_and_generate():
     try:
@@ -133,7 +135,7 @@ def fetch_and_generate():
                     'Customer + Order': row.get('Name', 'DEFAULT_ORDER'),
                     'StorageID': row.get('$rowID', 'DEFAULT_STORAGE_ID'),
                     'MailAdress': row.get('383W6', 'default@mail.com'),
-                    'Owner': row.get('loQhD', 'Default Owner'),      
+                    'Owner': row.get('loQhD', 'Default Owner'),
                     'qr': row.get('knlbN', 'DEFAULT_STORAGE_ID'),
                     'Created By': row.get('dVWZJ', 'Default Creator'),
                     'Content': row.get('PyIlB', 'Default Content'),
@@ -145,10 +147,11 @@ def fetch_and_generate():
             pdf_filename = 'pallet_label.pdf'
             mail_address, row_ids_to_delete = create_pallet_label(data_array, pdf_filename)
 
-            # Send the email with the PDF
-            send_email_with_attachment(mail_address, pdf_filename)
+            # Start email sending in a separate thread
+            email_thread = threading.Thread(target=send_email_with_attachment, args=(mail_address, pdf_filename))
+            email_thread.start()
 
-            # Delete the rows after sending the email
+            # Delete the rows after starting the email thread
             delete_rows(row_ids_to_delete)
 
             return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
