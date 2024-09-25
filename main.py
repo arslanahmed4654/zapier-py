@@ -126,6 +126,7 @@ def fetch_and_generate():
 
         if response.status_code == 200:
             data = response.json()
+            print(data)
             data_array = []
             for row in data.get('data', {}).get('rows', []):
                 entry_dict = {
@@ -145,10 +146,10 @@ def fetch_and_generate():
             mail_address, row_ids_to_delete = create_pallet_label(data_array, pdf_filename)
 
             # Send the email with the PDF
-            send_email_with_attachment(mail_address, pdf_filename)
+            # send_email_with_attachment(mail_address, pdf_filename)
 
             # Delete the rows after sending the email
-            delete_rows(row_ids_to_delete)
+            # delete_rows(row_ids_to_delete)
 
             return jsonify({"message": f"PDF created successfully at {pdf_filename}", "email": mail_address}), 200
         else:
