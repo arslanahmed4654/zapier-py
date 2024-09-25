@@ -29,15 +29,18 @@ class PDF(FPDF):
         self.rect(5, 5, 200, self.h / 2 - 5)
 
 def create_pallet_label(data_array, filename):
-    pdf = PDF()
+    pdf = FPDF()
     pdf.set_auto_page_break(auto=False)
-    
+
+    def clean_text(text):
+        return text.replace('�', '') if text else text
+
     # Loop through the data array to create individual pages
     for data in data_array:
         pdf.add_page()
 
         # QR Code generation
-        qr_code_data = data.get('StorageID', 'DEFAULT_STORAGE_ID') 
+        qr_code_data = clean_text(data.get('StorageID', 'DEFAULT_STORAGE_ID'))
         qr_code_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={qr_code_data}"
         qr_code_response = requests.get(qr_code_url)
 
@@ -52,14 +55,14 @@ def create_pallet_label(data_array, filename):
         # Set font for "Customer + Order"
         pdf.set_font('Arial', 'B', 50)
         pdf.set_xy(10, 70)
-        pdf.cell(0, 10, f"{data.get('Customer + Order', 'DEFAULT_ORDER')}", ln=True)
+        pdf.cell(0, 10, clean_text(data.get('Customer + Order', 'DEFAULT_ORDER')), ln=True)
 
         # Add a line space
         pdf.cell(0, 10, '', ln=True)  # Empty line for spacing
 
         # Set font for "Content"
         pdf.set_font('Arial', '', 25)
-        content = data.get('Content', 'Default Content')
+        content = clean_text(data.get('Content', 'Default Content'))
         pdf.multi_cell(0, 8, content)
 
         # Adjusting remaining space
@@ -69,22 +72,21 @@ def create_pallet_label(data_array, filename):
 
         # Set font for "Owner" and "Created By"
         pdf.set_font('Arial', '', 12)
-        pdf.cell(0, 8, f"Owner: {data.get('Owner', 'Default Owner')}", ln=True)
-        pdf.cell(0, 8, f"Created By: {data.get('Created By', 'Default Creator')}", ln=True)
+        pdf.cell(0, 8, f"Owner: {clean_text(data.get('Owner', 'Default Owner'))}", ln=True)
+        pdf.cell(0, 8, f"Created By: {clean_text(data.get('Created By', 'Default Creator'))}", ln=True)
 
         pdf.set_y(pdf.get_y() + 10)  # Additional spacing
 
-        label_revision = data.get('LabelRevision', 'DEFAULT_LABEL_REVISION')
-        position_id = data.get('PositionID', 'DEFAULT_POSITION_ID')
+        label_revision = clean_text(data.get('LabelRevision', 'DEFAULT_LABEL_REVISION'))
+        position_id = clean_text(data.get('PositionID', 'DEFAULT_POSITION_ID'))
         pdf.set_xy(pdf.w - 100, pdf.get_y())
         pdf.set_font('Arial', 'I', 10)
         pdf.cell(0, 10, f"{label_revision} - {position_id}", 0, 0, 'R')
 
-        mail_address = data.get('MailAdress', 'default@mail.com')
+        mail_address = clean_text(data.get('MailAdress', 'default@mail.com'))
 
     pdf.output(filename)
-    return mail_address, [data['StorageID'] for data in data_array]
-
+    return mail_address, [clean_text(data['StorageID']) for data in data_array]
 @app.route('/')
 def home():
     return render_template_string('''
